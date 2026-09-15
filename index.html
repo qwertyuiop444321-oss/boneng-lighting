@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>博能科技 · 智慧照明运营控制中心</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --bg:#070e1b; --panel:#0d1729; --panel2:#122036; --line:rgba(70,140,255,.16);
+    --pri:#2ea6ff; --grn:#25d07a; --org:#ff9a3c; --red:#ff5a6a; --txt:#e8f0fa; --sub:#7d96b8;
+    --cyan:#22d3ee;
+  }
+  html,body{height:100%;overflow:hidden;}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--txt);display:flex;flex-direction:column;}
+
+  /* 顶栏 */
+  .top{height:64px;flex:none;display:flex;align-items:center;gap:14px;padding:0 20px;
+    background:linear-gradient(180deg,#0e1d34,#0a1424);border-bottom:1px solid var(--line);position:relative;z-index:1000;}
+  .top::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
+    background:linear-gradient(90deg,transparent,var(--pri),transparent);opacity:.6;}
+  .top .lg{width:38px;height:38px;border-radius:10px;background:#fff;overflow:hidden;flex:none;display:flex;align-items:center;justify-content:center;font-size:18px;}
+  .top .lg img{width:100%;height:100%;object-fit:contain;}
+  .top .t1{font-size:17px;font-weight:800;letter-spacing:1px;}
+  .top .t1 small{display:block;font-size:9px;color:var(--sub);font-weight:400;letter-spacing:2px;margin-top:1px;}
+  .top .clock{margin-left:auto;text-align:right;}
+  .top .clock .h{font-size:20px;font-weight:700;font-family:Consolas,monospace;letter-spacing:1px;}
+  .top .clock .d{font-size:10.5px;color:var(--sub);margin-top:1px;}
+  .top .pill{font-size:11px;padding:5px 11px;border-radius:20px;background:rgba(37,208,122,.1);color:var(--grn);display:flex;align-items:center;gap:6px;}
+  .top .pill i{width:6px;height:6px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:lp 1.6s infinite;}
+  @keyframes lp{50%{opacity:.3;}}
+
+  .main{flex:1;display:flex;min-height:0;}
+  .nav{width:74px;flex:none;background:linear-gradient(180deg,#0c1728,#0a1220);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:10px 0;gap:2px;}
+  .nav .it{display:flex;flex-direction:column;align-items:center;gap:4px;padding:11px 4px;font-size:10.5px;color:var(--sub);cursor:pointer;transition:.18s;border-left:2px solid transparent;}
+  .nav .it .ic{font-size:19px;filter:grayscale(1) opacity(.55);transition:.18s;}
+  .nav .it:hover{color:var(--txt);background:rgba(46,166,255,.06);}
+  .nav .it.on{color:var(--pri);background:linear-gradient(90deg,rgba(46,166,255,.14),transparent);border-left-color:var(--pri);font-weight:700;}
+  .nav .it.on .ic{filter:none;transform:scale(1.08);}
+
+  .content{flex:1;position:relative;min-width:0;}
+  .view{position:absolute;inset:0;display:none;padding:12px;overflow:auto;}
+  .view.on{display:block;animation:fade .28s;}
+  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  .view::-webkit-scrollbar{width:6px;}
+  .view::-webkit-scrollbar-thumb{background:rgba(70,140,255,.25);border-radius:3px;}
+
+  .card{background:linear-gradient(150deg,#122036,#0d1729);border:1px solid var(--line);border-radius:10px;padding:12px;}
+  .card .h{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+  .card .h .n{font-size:13px;font-weight:700;letter-spacing:.5px;}
+  .card .h .x{margin-left:auto;font-size:10.5px;color:var(--sub);}
+  .card .h::before{content:'';width:3px;height:13px;border-radius:2px;background:linear-gradient(180deg,var(--pri),var(--cyan));}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;}
+  .kpi{background:linear-gradient(150deg,#122036,#0d1729);border:1px solid var(--line);border-radius:10px;padding:13px 14px;position:relative;overflow:hidden;}
+  .kpi::after{content:'';position:absolute;right:-20px;top:-20px;width:76px;height:76px;border-radius:50%;background:radial-gradient(circle,rgba(46,166,255,.2),transparent 70%);}
+  .kpi .lb{font-size:11px;color:var(--sub);margin-bottom:7px;display:flex;align-items:center;gap:5px;}
+  .kpi .vl{font-size:27px;font-weight:800;font-family:Consolas,monospace;line-height:1;letter-spacing:.5px;}
+  .kpi .vl small{font-size:12px;font-weight:400;color:var(--sub);margin-left:3px;}
+  .kpi .dt{font-size:10.5px;color:var(--sub);margin-top:7px;}
+  .kpi .dt b{color:var(--grn);}
+  .kpi.b .vl{color:var(--pri);} .kpi.g .vl{color:var(--grn);} .kpi.o .vl{color:var(--org);} .kpi.r .vl{color:var(--red);}
+  .kpi.r{border-color:rgba(255,90,106,.3);}
+
+  .mapwrap{position:absolute;inset:12px;display:grid;grid-template-columns:1fr 340px;gap:12px;}
+  #map{width:100%;height:100%;border-radius:10px;border:1px solid var(--line);background:#0a1322;}
+  .side{display:flex;flex-direction:column;gap:12px;min-height:0;}
+  .side .card{flex:none;}
+  .side .scroll{flex:1;overflow-y:auto;min-height:0;margin:-2px -4px;}
+  .side .scroll::-webkit-scrollbar{width:5px;}
+  .side .scroll::-webkit-scrollbar-thumb{background:rgba(70,140,255,.25);border-radius:3px;}
+
+  .leaflet-container{background:#0a1322;font-family:inherit;}
+  .leaflet-tile{filter:invert(1) hue-rotate(190deg) brightness(.72) contrast(1.15) saturate(.65);}
+  .leaflet-control-attribution{background:rgba(10,20,36,.7)!important;color:#5a7396!important;font-size:9px!important;}
+  .leaflet-control-attribution a{color:#3a7bbf!important;}
+  .leaflet-bar a{background:#122036!important;color:#9ab5d8!important;border-color:rgba(70,140,255,.2)!important;}
+  .leaflet-bar a:hover{background:#1a2c4a!important;}
+  .leaflet-popup-content-wrapper{background:#122036!important;color:var(--txt)!important;border:1px solid var(--line)!important;border-radius:8px!important;}
+  .leaflet-popup-tip{background:#122036!important;}
+  .leaflet-popup-content{margin:10px 12px!important;font-size:12px!important;line-height:1.7!important;}
+  .leaflet-popup-close-button{color:#7d96b8!important;}
+
+  .lampdot{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;background:var(--panel);border:1px solid var(--line);margin-bottom:6px;cursor:pointer;transition:.15s;font-size:12px;}
+  .lampdot:hover{background:var(--panel2);border-color:rgba(70,140,255,.35);}
+  .lampdot .d{width:9px;height:9px;border-radius:50%;flex:none;}
+  .lampdot .d.on{background:var(--grn);box-shadow:0 0 8px var(--grn);}
+  .lampdot .d.off{background:#3a4d68;}
+  .lampdot .d.fault{background:var(--red);box-shadow:0 0 8px var(--red);animation:fb .9s infinite;}
+  @keyframes fb{50%{opacity:.25;}}
+  .lampdot .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lampdot .st{font-size:10px;color:var(--sub);font-family:Consolas,monospace;flex:none;}
+
+  .tb{width:100%;border-collapse:collapse;font-size:12px;}
+  .tb th{text-align:left;padding:9px 10px;font-size:11px;color:var(--sub);font-weight:600;background:rgba(46,166,255,.07);border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2;}
+  .tb td{padding:9px 10px;border-bottom:1px solid rgba(70,140,255,.08);white-space:nowrap;}
+  .tb tr:hover td{background:rgba(46,166,255,.05);}
+  .badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;}
+  .badge.g{background:rgba(37,208,122,.14);color:var(--grn);}
+  .badge.r{background:rgba(255,90,106,.14);color:var(--red);}
+  .badge.o{background:rgba(255,154,60,.14);color:var(--org);}
+  .badge.b{background:rgba(46,166,255,.14);color:var(--pri);}
+  .badge.gray{background:rgba(125,150,184,.14);color:var(--sub);}
+
+  .btn{padding:9px 15px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px;font-family:inherit;}
+  .btn:hover{border-color:rgba(70,140,255,.45);background:#182a46;transform:translateY(-1px);}
+  .btn:active{transform:scale(.97);}
+  .btn.pri{background:linear-gradient(90deg,#2ea6ff,#1c7fe0);border-color:transparent;}
+  .btn.gr{background:linear-gradient(90deg,#25d07a,#18a862);border-color:transparent;color:#04220f;}
+  .btn.rd{border-color:rgba(255,90,106,.4);color:#ffb0ba;}
+  .btn.on{background:linear-gradient(90deg,#2ea6ff,#1c7fe0);border-color:transparent;color:#fff;}
+
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .rowline{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-bottom:7px;}
+  .rowline b{color:var(--txt);font-family:Consolas,monospace;}
+  .bar{height:6px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden;margin-bottom:11px;}
+  .bar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#2ea6ff,#22d3ee);transition:width .6s;}
+
+  .stg{display:flex;align-items:center;gap:11px;padding:10px 11px;background:var(--panel);border:1px solid var(--line);border-radius:9px;margin-bottom:8px;transition:.15s;}
+  .stg:hover{border-color:rgba(70,140,255,.3);}
+  .stg .ic{width:34px;height:34px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;font-size:17px;background:rgba(46,166,255,.1);}
+  .stg .tx{flex:1;min-width:0;}
+  .stg .tx .n{font-size:12.5px;font-weight:600;}
+  .stg .tx .d{font-size:10.5px;color:var(--sub);margin-top:2px;}
+  .sw{width:40px;height:22px;border-radius:12px;background:#26374f;position:relative;flex:none;cursor:pointer;transition:.2s;}
+  .sw i{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;}
+  .sw.on{background:linear-gradient(90deg,#2ea6ff,#25d07a);}
+  .sw.on i{left:20px;}
+
+  .al{display:flex;gap:10px;padding:10px 11px;border-radius:9px;background:var(--panel);border-left:3px solid var(--red);margin-bottom:7px;font-size:12px;}
+  .al.w{border-left-color:var(--org);} .al.i{border-left-color:var(--pri);}
+  .al .t{flex:1;min-width:0;}
+  .al .t .n{font-weight:600;}
+  .al .t .d{font-size:10.5px;color:var(--sub);margin-top:3px;font-family:Consolas,monospace;}
+  .al .tm{font-size:10px;color:var(--sub);flex:none;}
+
+  .toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%) translateY(20px);background:rgba(18,32,54,.98);border:1px solid rgba(70,140,255,.35);color:#fff;font-size:13px;padding:11px 20px;border-radius:24px;opacity:0;pointer-events:none;transition:.28s;z-index:9999;white-space:nowrap;box-shadow:0 10px 30px rgba(0,0,0,.5);}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .boot{position:fixed;inset:0;background:#070e1b;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .5s;}
+  .boot.hide{opacity:0;pointer-events:none;}
+  .boot .bt{font-size:20px;font-weight:800;letter-spacing:3px;background:linear-gradient(90deg,#2ea6ff,#22d3ee,#25d07a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .boot .bs{font-size:11px;color:var(--sub);letter-spacing:4px;}
+  .boot .bl{width:220px;height:3px;border-radius:2px;background:rgba(70,140,255,.15);overflow:hidden;}
+  .boot .bl i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2ea6ff,#22d3ee);animation:ld 1.4s ease forwards;}
+  @keyframes ld{to{width:100%;}}
+</style>
+</head>
+<body>
+
+<div class="boot" id="boot">
+  <div class="bt">博能科技 · 智慧照明运营控制中心</div>
+  <div class="bs">BONENG SMART LIGHTING CONTROL CENTER</div>
+  <div class="bl"><i></i></div>
+</div>
+
+<div class="top">
+  <div class="lg"><img src="logo.png" alt="LOGO" onerror="this.parentNode.innerHTML='💡'"></div>
+  <div class="t1">智慧照明运营控制中心<small>BONENG · SMART LIGHTING OPERATION CENTER</small></div>
+  <div class="pill"><i></i><span>系统在线</span></div>
+  <div class="clock"><div class="h" id="clk">--:--:--</div><div class="d" id="dt">----</div></div>
+</div>
+
+<div class="main">
+  <div class="nav">
+    <div class="it on" onclick="go(this,'v-map')"><span class="ic">🗺️</span>监控大屏</div>
+    <div class="it" onclick="go(this,'v-dev')"><span class="ic">💡</span>设备控制</div>
+    <div class="it" onclick="go(this,'v-plan')"><span class="ic">⚙️</span>控制策略</div>
+    <div class="it" onclick="go(this,'v-alarm')"><span class="ic">🔔</span>告警工单</div>
+    <div class="it" onclick="go(this,'v-asset')"><span class="ic">📦</span>资产管理</div>
+    <div class="it" onclick="go(this,'v-user')"><span class="ic">👥</span>用户权限</div>
+    <div class="it" onclick="go(this,'v-log')"><span class="ic">📋</span>运行日志</div>
+  </div>
+
+  <div class="content">
+    <!-- 1 监控大屏 -->
+    <div class="view on" id="v-map">
+      <div class="mapwrap">
+        <div style="position:relative;min-width:0;overflow:hidden;border-radius:10px;border:1px solid var(--line);">
+          <div id="map"></div>
+        </div>
+        <div class="side">
+          <div class="card" style="padding:10px 12px;">
+            <div class="h" style="margin-bottom:8px;"><div class="n">实时概况</div><div class="x">实时</div></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">
+              <div><div class="rowline" style="margin:0 0 3px;"><span>在线</span><b style="color:var(--grn)" id="m-on">0</b></div><div class="bar" style="margin:0;"><i id="mb-on" style="width:0"></i></div></div>
+              <div><div class="rowline" style="margin:0 0 3px;"><span>故障</span><b style="color:var(--red)" id="m-ft">0</b></div><div class="bar" style="margin:0;"><i id="mb-ft" style="width:0;background:linear-gradient(90deg,#ff5a6a,#ff9a3c)"></i></div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px;">
+              <div style="font-size:11px;color:var(--sub);">实时功率 <b style="color:var(--pri);font-family:Consolas;" id="m-kw">0</b> kW</div>
+              <div style="font-size:11px;color:var(--sub);">今日能耗 <b style="color:var(--org);font-family:Consolas;" id="m-kwh">0</b> kWh</div>
+            </div>
+          </div>
+          <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0;padding:10px 12px;">
+            <div class="h" style="margin-bottom:9px;"><div class="n">设备列表</div><div class="x" id="devcount">--</div></div>
+            <div class="scroll" id="maplist"></div>
+          </div>
+          <div class="card">
+            <div class="h" style="margin-bottom:8px;"><div class="n">快捷控制</div></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div class="btn pri" style="justify-content:center;" onclick="allLamps(1)">☀️ 全开</div>
+              <div class="btn" style="justify-content:center;" onclick="allLamps(0)">🌙 全关</div>
+              <div class="btn gr" style="justify-content:center;" onclick="applyMode('节能')">⚡ 节能</div>
+              <div class="btn rd" style="justify-content:center;" onclick="injectFault()">⚠️ 演练</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 设备控制 -->
+    <div class="view" id="v-dev">
+      <div class="kpis">
+        <div class="kpi b"><div class="lb">💡 设备总数</div><div class="vl">500</div><div class="dt">灯控终端</div></div>
+        <div class="kpi g"><div class="lb">✅ 在线</div><div class="vl" id="d-on">0</div><div class="dt">在线率 <b id="d-rate">--</b></div></div>
+        <div class="kpi r"><div class="lb">⚠️ 故障</div><div class="vl" id="d-ft">0</div><div class="dt">待派单 <b style="color:var(--org)">自动生成</b></div></div>
+        <div class="kpi o"><div class="lb">⚡ 实时功率</div><div class="vl" id="d-kw">0<small>kW</small></div><div class="dt">今日能耗 <b id="d-kwh">0</b> kWh</div></div>
+      </div>
+
+      <div class="two" style="margin-bottom:12px;">
+        <div class="card">
+          <div class="h"><div class="n">统一亮度调节</div><div class="x" id="br-val">100%</div></div>
+          <input type="range" id="br" min="10" max="100" value="100" oninput="setBright(this.value)" style="width:100%;accent-color:#2ea6ff;height:6px;">
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <div class="btn" style="flex:1;justify-content:center;" onclick="setBright(30)">深夜 30%</div>
+            <div class="btn" style="flex:1;justify-content:center;" onclick="setBright(50)">节能 50%</div>
+            <div class="btn pri" style="flex:1;justify-content:center;" onclick="setBright(100)">全亮 100%</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="h"><div class="n">批量操作</div><div class="x">500 台在线</div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="btn" style="justify-content:center;" onclick="toast('已下发 OTA 升级任务至 500 台设备')">⬆️ OTA 升级</div>
+            <div class="btn" style="justify-content:center;" onclick="toast('已下发时钟同步指令')">🕐 时钟同步</div>
+            <div class="btn" style="justify-content:center;" onclick="toast('已导出设备清单 Excel')">📤 导出清单</div>
+            <div class="btn" style="justify-content:center;" onclick="toast('已刷新全部设备状态')">🔄 刷新状态</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;height:calc(100% - 258px);">
+        <div class="h"><div class="n">设备清单</div>
+          <div style="margin-left:auto;display:flex;gap:6px;">
+            <div class="btn on" style="padding:5px 11px;font-size:11px;" data-f="all" onclick="setF('all',this)">全部</div>
+            <div class="btn" style="padding:5px 11px;font-size:11px;" data-f="on" onclick="setF('on',this)">点亮</div>
+            <div class="btn" style="padding:5px 11px;font-size:11px;" data-f="off" onclick="setF('off',this)">关闭</div>
+            <div class="btn" style="padding:5px 11px;font-size:11px;" data-f="fault" onclick="setF('fault',this)">故障</div>
+          </div>
+        </div>
+        <div style="flex:1;overflow:auto;">
+          <table class="tb">
+            <thead><tr><th>设备编号</th><th>安装路段</th><th>杆号</th><th>状态</th><th>亮度</th><th>功率</th><th>操作</th></tr></thead>
+            <tbody id="devtbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 控制策略 -->
+    <div class="view" id="v-plan">
+      <div class="two">
+        <div class="card">
+          <div class="h"><div class="n">策略列表</div><div class="x">点击开关启停</div></div>
+          <div id="stgList"></div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:12px;">
+            <div class="h"><div class="n">准时日表 · 6 组时段</div><div class="x">绝对时间点</div></div>
+            <table class="tb" style="font-size:12px;">
+              <thead><tr><th>组</th><th>开启时刻</th><th>关闭时刻</th><th>亮度</th><th>状态</th></tr></thead>
+              <tbody id="daytable"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="h"><div class="n">计时日表 · 保持时长</div><div class="x">相对时长循环</div></div>
+            <table class="tb" style="font-size:12px;">
+              <thead><tr><th>组</th><th>起始</th><th>维持</th><th>亮度</th><th>状态</th></tr></thead>
+              <tbody id="timtable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 告警工单 -->
+    <div class="view" id="v-alarm">
+      <div class="kpis">
+        <div class="kpi r"><div class="lb">🔴 待处理</div><div class="vl" id="a-pend">0</div><div class="dt">需立即响应</div></div>
+        <div class="kpi o"><div class="lb">🟠 处理中</div><div class="vl" id="a-doing">0</div><div class="dt">运维跟进中</div></div>
+        <div class="kpi g"><div class="lb">✅ 今日闭环</div><div class="vl" id="a-done">0</div><div class="dt">平均处理 <b>42 分钟</b></div></div>
+        <div class="kpi b"><div class="lb">📊 本月工单</div><div class="vl">68</div><div class="dt">闭环率 <b>97.1%</b></div></div>
+      </div>
+      <div class="two">
+        <div class="card" style="display:flex;flex-direction:column;min-height:0;">
+          <div class="h"><div class="n">实时告警</div><div class="x" id="alcount">--</div></div>
+          <div style="overflow:auto;flex:1;max-height:calc(100vh - 300px);" id="alarmList"></div>
+        </div>
+        <div class="card">
+          <div class="h"><div class="n">工单流转</div><div class="x">一键派单</div></div>
+          <div class="rowline"><span>待派单</span><b style="color:var(--org)">3</b></div>
+          <div class="bar"><i style="width:30%;background:linear-gradient(90deg,#ff9a3c,#ff7a3c)"></i></div>
+          <div class="rowline"><span>维修中</span><b style="color:var(--pri)">2</b></div>
+          <div class="bar"><i style="width:20%"></i></div>
+          <div class="rowline"><span>今日已闭环</span><b style="color:var(--grn)">7</b></div>
+          <div class="bar"><i style="width:70%;background:linear-gradient(90deg,#25d07a,#18a862)"></i></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+            <div class="btn pri" style="justify-content:center;" onclick="toast('已自动派单至最近运维员 · 距现场 1.2km')">📤 一键派单</div>
+            <div class="btn" style="justify-content:center;" onclick="toast('已生成明日巡检计划')">📋 生成巡检</div>
+          </div>
+          <div class="h" style="margin:16px 0 10px;"><div class="n">运维绩效 · 本月</div></div>
+          <table class="tb" style="font-size:12px;">
+            <thead><tr><th>运维员</th><th>处理</th><th>平均耗时</th><th>评分</th></tr></thead>
+            <tbody>
+              <tr><td>运维员A</td><td>23 单</td><td>38 分钟</td><td><span class="badge g">4.9</span></td></tr>
+              <tr><td>运维员B</td><td>19 单</td><td>45 分钟</td><td><span class="badge g">4.7</span></td></tr>
+              <tr><td>运维员C</td><td>17 单</td><td>51 分钟</td><td><span class="badge b">4.5</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5 资产管理 -->
+    <div class="view" id="v-asset">
+      <div class="kpis">
+        <div class="kpi b"><div class="lb">🏗️ 灯杆</div><div class="vl">500</div><div class="dt">根</div></div>
+        <div class="kpi b"><div class="lb">💡 灯具</div><div class="vl">500</div><div class="dt">套</div></div>
+        <div class="kpi g"><div class="lb">✅ 完好率</div><div class="vl">96.8<small>%</small></div><div class="dt">高于行业均值</div></div>
+        <div class="kpi o"><div class="lb">🔧 本月更换</div><div class="vl">12</div><div class="dt">主要：驱动电源</div></div>
+      </div>
+      <div class="two">
+        <div class="card">
+          <div class="h"><div class="n">资产台账</div><div class="x">一物一码</div></div>
+          <div class="rowline"><span>LED 路灯</span><b>452 套</b></div><div class="bar"><i style="width:90%"></i></div>
+          <div class="rowline"><span>单灯控制器</span><b>500 个</b></div><div class="bar"><i style="width:100%"></i></div>
+          <div class="rowline"><span>集中控制器</span><b>18 台</b></div><div class="bar"><i style="width:100%"></i></div>
+          <div class="rowline"><span>智慧灯杆</span><b>36 根</b></div><div class="bar"><i style="width:7%"></i></div>
+          <div class="rowline" style="margin-top:12px;"><span>编码规则</span><b style="font-family:inherit;font-size:11px;">BN-路段-杆号-类型</b></div>
+          <div class="rowline"><span>保修到期提醒</span><b style="color:var(--org)">8 项</b></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+            <div class="btn" style="justify-content:center;" onclick="toast('已导出资产台账 Excel')">📤 导出台账</div>
+            <div class="btn" style="justify-content:center;" onclick="toast('请使用移动端扫码盘点')">📷 扫码盘点</div>
+          </div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;min-height:0;">
+          <div class="h"><div class="n">资产健康度</div><div class="x">全生命周期</div></div>
+          <div id="assetChart" style="padding:6px 0;"></div>
+          <div class="h" style="margin:14px 0 10px;"><div class="n">近期更换记录</div></div>
+          <table class="tb" style="font-size:12px;">
+            <thead><tr><th>日期</th><th>设备</th><th>部位</th><th>原因</th></tr></thead>
+            <tbody>
+              <tr><td>09-14</td><td>BN-0087</td><td>驱动电源</td><td>电压击穿</td></tr>
+              <tr><td>09-12</td><td>BN-0231</td><td>LED 模组</td><td>光衰超标</td></tr>
+              <tr><td>09-11</td><td>BN-0455</td><td>单灯控制器</td><td>通信故障</td></tr>
+              <tr><td>09-09</td><td>BN-0102</td><td>驱动电源</td><td>雷击损坏</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6 用户权限 -->
+    <div class="view" id="v-user">
+      <div class="kpis">
+        <div class="kpi b"><div class="lb">👤 一级账号</div><div class="vl">2</div><div class="dt">系统管理员</div></div>
+        <div class="kpi b"><div class="lb">👥 二级账号</div><div class="vl">6</div><div class="dt">片区管理员</div></div>
+        <div class="kpi b"><div class="lb">🧑‍🔧 三级账号</div><div class="vl">14</div><div class="dt">运维人员</div></div>
+        <div class="kpi g"><div class="lb">🔗 第三方账号</div><div class="vl">3</div><div class="dt">业主单位查看</div></div>
+      </div>
+      <div class="card">
+        <div class="h"><div class="n">用户列表</div>
+          <div style="margin-left:auto;display:flex;gap:8px;">
+            <div class="btn pri" style="padding:6px 13px;font-size:12px;" onclick="toast('打开新建用户表单')">＋ 新建用户</div>
+          </div>
+        </div>
+        <table class="tb">
+          <thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>管辖范围</th><th>手机号</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td>admin</td><td>管理员</td><td><span class="badge b">超级管理员</span></td><td>全部</td><td>138****0001</td><td><span class="badge g">正常</span></td><td><span style="color:var(--pri);cursor:pointer;">编辑</span></td></tr>
+            <tr><td>region_admin_a</td><td>王管理</td><td><span class="badge b">二级管理</span></td><td>秀峰区</td><td>139****0002</td><td><span class="badge g">正常</span></td><td><span style="color:var(--pri);cursor:pointer;">编辑</span></td></tr>
+            <tr><td>region_admin_b</td><td>赵管理</td><td><span class="badge b">二级管理</span></td><td>叠彩区</td><td>137****0003</td><td><span class="badge g">正常</span></td><td><span style="color:var(--pri);cursor:pointer;">编辑</span></td></tr>
+            <tr><td>ops_user_a</td><td>运维员A</td><td><span class="badge gray">三级运维</span></td><td>经十路片区</td><td>136****0004</td><td><span class="badge g">正常</span></td><td><span style="color:var(--pri);cursor:pointer;">编辑</span></td></tr>
+            <tr><td>ops_user_b</td><td>运维员B</td><td><span class="badge gray">三级运维</span></td><td>滨江大道片区</td><td>135****0005</td><td><span class="badge g">正常</span></td><td><span style="color:var(--pri);cursor:pointer;">编辑</span></td></tr>
+            <tr><td>owner_view</td><td>业主方</td><td><span class="badge o">第三方查看</span></td><td>只读</td><td>—</td><td><span class="badge g">正常</span></td><td><span style="color:var(--pri);cursor:pointer;">编辑</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 7 运行日志 -->
+    <div class="view" id="v-log">
+      <div class="two" style="margin-bottom:12px;">
+        <div class="card">
+          <div class="h"><div class="n">日志筛选</div><div class="x">近 24 小时</div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <div class="btn on" style="justify-content:center;" onclick="toast('筛选：全部日志')">全部</div>
+            <div class="btn" style="justify-content:center;" onclick="toast('筛选：操作日志')">操作</div>
+            <div class="btn" style="justify-content:center;" onclick="toast('筛选：告警日志')">告警</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="h"><div class="n">日志统计</div></div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px;text-align:center;">
+            <div><div class="mono" style="font-size:20px;font-weight:800;color:var(--pri);font-family:Consolas;">1,284</div><div style="font-size:10.5px;color:var(--sub);margin-top:4px;">操作记录</div></div>
+            <div><div class="mono" style="font-size:20px;font-weight:800;color:var(--red);font-family:Consolas;">23</div><div style="font-size:10.5px;color:var(--sub);margin-top:4px;">告警记录</div></div>
+            <div><div class="mono" style="font-size:20px;font-weight:800;color:var(--grn);font-family:Consolas;">98.2%</div><div style="font-size:10.5px;color:var(--sub);margin-top:4px;">指令成功率</div></div>
+            <div><div class="mono" style="font-size:20px;font-weight:800;color:var(--org);font-family:Consolas;">186ms</div><div style="font-size:10.5px;color:var(--sub);margin-top:4px;">平均响应</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="h"><div class="n">设备与系统日志</div><div class="x" id="loglive">实时刷新</div></div>
+        <table class="tb">
+          <thead><tr><th>时间</th><th>类型</th><th>对象</th><th>内容</th><th>操作人</th><th>结果</th></tr></thead>
+          <tbody id="logtbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============ 数据 ============ */
+const TOTAL = 500;
+const ROADS = ['经十路','滨江大道','中山路','人民路','解放路','象山大道','七星路','环城南路'];
+const CENTER = [25.2736, 110.2900]; // 桂林
+const lamps = [];
+for(let i=1;i<=TOTAL;i++){
+  const r = Math.random();
+  let st = 'on';
+  if(r<0.012) st='fault'; else if(r>0.988) st='off';
+  lamps.push({
+    id:'BN-'+String(i).padStart(4,'0'),
+    st, br: st==='on' ? (Math.random()<0.55?100:70) : 0,
+    road: ROADS[i%ROADS.length],
+    pole:'P'+(100+i),
+    lat: CENTER[0] + (Math.random()-0.5)*0.055,
+    lng: CENTER[1] + (Math.random()-0.5)*0.062
+  });
+}
+let bright=100, filter='all';
+let kwh=412.6;
+
+/* ============ 时钟 ============ */
+function clock(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  document.getElementById('clk').textContent = p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+  const wk=['日','一','二','三','四','五','六'][d.getDay()];
+  document.getElementById('dt').textContent = d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' 星期'+wk;
+}
+
+/* ============ 导航 ============ */
+function go(el,id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.querySelectorAll('.nav .it').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  if(id==='v-map' && map) setTimeout(()=>map.invalidateSize(),120);
+}
+
+/* ============ 地图 ============ */
+let map, layer, markers=[];
+function initMap(){
+  map = L.map('map',{zoomControl:true, attributionControl:true, center:CENTER, zoom:13, preferCanvas:true});
+  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+    {subdomains:['1','2','3','4'], maxZoom:18, attribution:'高德地图'}).addTo(map);
+  layer = L.layerGroup().addTo(map);
+  renderMarkers();
+}
+function dotColor(st){ return st==='on'?'#25d07a':(st==='fault'?'#ff5a6a':'#5a7396'); }
+function renderMarkers(){
+  layer.clearLayers(); markers=[];
+  lamps.forEach(l=>{
+    const c = dotColor(l.st);
+    const pulse = l.st==='fault' ? ';animation:fb .9s infinite;' : '';
+    const m = L.circleMarker([l.lat,l.lng],{
+      radius: l.st==='on'?4.5:4, color:c, weight:1.2, opacity:.95,
+      fillColor:c, fillOpacity:l.st==='on'?.9:.45
+    });
+    m.bindPopup(
+      '<b>'+l.id+'</b><br>路段：'+l.road+'<br>杆号：'+l.pole+
+      '<br>状态：'+(l.st==='on'?'<span style="color:#25d07a">点亮 '+l.br+'%</span>':(l.st==='fault'?'<span style="color:#ff5a6a">故障告警</span>':'<span style="color:#7d96b8">已关闭</span>'))+
+      '<br><span style="color:#2ea6ff;cursor:pointer" onclick="toggleLamp(\''+l.id+'\')">▶ 点击切换开关</span>'
+    );
+    m.addTo(layer);
+    markers.push(m);
+  });
+  renderMapList();
+  updateStats();
+}
+function renderMapList(){
+  const el = document.getElementById('maplist');
+  const list = lamps.slice(0,60);
+  document.getElementById('devcount').textContent = TOTAL+' 台';
+  el.innerHTML = list.map(l=>`
+    <div class="lampdot" onclick="focusLamp('${l.id}')">
+      <span class="d ${l.st==='on'?'on':(l.st==='fault'?'fault':'off')}"></span>
+      <span class="nm">${l.id} · ${l.road}</span>
+      <span class="st">${l.st==='on'?l.br+'%':(l.st==='fault'?'故障':'关')}</span>
+    </div>`).join('');
+}
+function focusLamp(id){
+  const l = lamps.find(x=>x.id===id); if(!l) return;
+  map.setView([l.lat,l.lng], 17, {animate:true});
+  const m = markers[lamps.indexOf(l)];
+  if(m) m.openPopup();
+}
+
+/* ============ 统计 ============ */
+function updateStats(){
+  const on = lamps.filter(l=>l.st==='on').length;
+  const ft = lamps.filter(l=>l.st==='fault').length;
+  const off = lamps.filter(l=>l.st==='off').length;
+  const kw = lamps.reduce((s,l)=> s + (l.st==='on'? l.br/100*0.1 : 0), 0);
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+  set('m-on',on); set('m-ft',ft);
+  const mbOn=document.getElementById('mb-on'); if(mbOn) mbOn.style.width=(on/TOTAL*100)+'%';
+  const mbFt=document.getElementById('mb-ft'); if(mbFt) mbFt.style.width=Math.max(2,ft/TOTAL*100)+'%';
+  set('m-kw',kw.toFixed(1)); set('m-kwh',kwh.toFixed(1));
+  set('d-on',on); set('d-ft',ft); set('d-rate',(on/TOTAL*100).toFixed(1)+'%');
+  set('d-kwh',kwh.toFixed(1));
+  const dkw=document.getElementById('d-kw'); if(dkw) dkw.innerHTML=kw.toFixed(1)+'<small>kW</small>';
+  renderDevTable();
+}
+function renderDevTable(){
+  const tb = document.getElementById('devtbody'); if(!tb) return;
+  const f = lamps.filter(l=> filter==='all'?true:l.st===filter).slice(0,80);
+  tb.innerHTML = f.map(l=>`
+    <tr>
+      <td class="mono" style="font-family:Consolas;">${l.id}</td>
+      <td>${l.road}</td><td class="mono" style="font-family:Consolas;">${l.pole}</td>
+      <td>${l.st==='on'?'<span class="badge g">点亮</span>':(l.st==='fault'?'<span class="badge r">故障</span>':'<span class="badge gray">关闭</span>')}</td>
+      <td class="mono" style="font-family:Consolas;">${l.br}%</td>
+      <td class="mono" style="font-family:Consolas;">${(l.st==='on'?l.br/100*0.1:0).toFixed(2)} kW</td>
+      <td><span style="color:var(--pri);cursor:pointer;" onclick="toggleLamp('${l.id}')">开关</span></td>
+    </tr>`).join('');
+}
+function setF(f,el){
+  filter=f;
+  document.querySelectorAll('[data-f]').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  renderDevTable();
+}
+
+/* ============ 控制 ============ */
+function toggleLamp(id){
+  const l = lamps.find(x=>x.id===id); if(!l) return;
+  if(l.st==='fault'){ toast(id+' 故障中，已生成维修工单'); return; }
+  if(l.st==='on'){ l.st='off'; l.br=0; toast(id+' 已关闭'); }
+  else { l.st='on'; l.br=bright; toast(id+' 已开启 · '+bright+'%'); }
+  renderMarkers();
+}
+function allLamps(on){
+  lamps.forEach(l=>{ if(l.st!=='fault'){ l.st=on?'on':'off'; l.br=on?bright:0; } });
+  renderMarkers();
+  toast(on?'已开启全部路灯（500 台）':'已关闭全部路灯（500 台）');
+}
+function setBright(v){
+  bright=+v;
+  document.getElementById('br-val').textContent=v+'%';
+  lamps.forEach(l=>{ if(l.st==='on') l.br=bright; });
+  renderMarkers();
+}
+function applyMode(m){
+  const s = (m==='节能'||m==='深夜') ? 50 : 100;
+  bright=s;
+  const br=document.getElementById('br'); if(br){br.value=s;}
+  const bv=document.getElementById('br-val'); if(bv){bv.textContent=s+'%';}
+  lamps.forEach(l=>{ if(l.st!=='fault'){ l.st='on'; l.br=s; } });
+  renderMarkers();
+  toast('已下发【'+m+'模式】至 500 台设备 · 节电率 '+(s===50?'72%':'38%'));
+}
+function injectFault(){
+  const ok = lamps.filter(l=>l.st!=='fault');
+  const l = ok[Math.floor(Math.random()*ok.length)];
+  l.st='fault'; l.br=0;
+  alarms.unshift({lv:'r',n:'灯具损坏 · '+l.id,d:l.road+' '+l.pole+' | 电流异常',t:'刚刚'});
+  renderMarkers(); renderAlarms(); updateStats();
+  toast('⚠️ '+l.id+' 触发故障告警，已自动生成工单');
+}
+
+/* ============ 策略 ============ */
+const strategies = [
+  {ic:'🌙',n:'分时段调光',d:'23:00-05:00 自动降至 50%',on:true},
+  {ic:'🛣️',n:'半夜灯（隔盏亮）',d:'后半夜隔盏点亮，节省 50% 能耗',on:true},
+  {ic:'🚗',n:'按需照明（雷达感应）',d:'车来提亮 / 车走降亮',on:true},
+  {ic:'🌦️',n:'光控 + 时控',d:'依日照强度自动开关灯',on:true},
+  {ic:'🎉',n:'节假日场景',d:'一键切换节日亮化模式',on:false},
+  {ic:'🔋',n:'降功率运行',d:'限 80% 额定功率，延长灯具寿命',on:false},
+];
+function renderStg(){
+  const el=document.getElementById('stgList'); if(!el) return;
+  el.innerHTML = strategies.map((s,i)=>`
+    <div class="stg">
+      <div class="ic">${s.ic}</div>
+      <div class="tx"><div class="n">${s.n}</div><div class="d">${s.d}</div></div>
+      <div class="sw ${s.on?'on':''}" onclick="togStg(${i})"><i></i></div>
+    </div>`).join('');
+}
+function togStg(i){
+  strategies[i].on = !strategies[i].on;
+  renderStg();
+  toast('「'+strategies[i].n+'」'+(strategies[i].on?'已启用':'已停用'));
+}
+function renderTables(){
+  const day=[['1组','18:30','23:00','100%'],['2组','23:00','00:00','70%'],['3组','00:00','02:00','50%'],
+             ['4组','02:00','04:00','40%'],['5组','04:00','05:30','60%'],['6组','05:30','06:30','0%']];
+  const dt=document.getElementById('daytable');
+  if(dt) dt.innerHTML = day.map((r,i)=>`<tr><td>${r[0]}</td><td class="mono" style="font-family:Consolas;">${r[1]}</td><td class="mono" style="font-family:Consolas;">${r[2]}</td><td class="mono" style="font-family:Consolas;">${r[3]}</td><td>${i<5?'<span class="badge g">生效</span>':'<span class="badge gray">停用</span>'}</td></tr>`).join('');
+  const tim=[['1组','18:30','270 分钟','100%'],['2组','23:00','120 分钟','70%'],['3组','01:00','180 分钟','50%'],
+             ['4组','04:00','90 分钟','60%'],['5组','05:30','60 分钟','0%'],['6组','—','—','—']];
+  const tt=document.getElementById('timtable');
+  if(tt) tt.innerHTML = tim.map((r,i)=>`<tr><td>${r[0]}</td><td class="mono" style="font-family:Consolas;">${r[1]}</td><td class="mono" style="font-family:Consolas;">${r[2]}</td><td class="mono" style="font-family:Consolas;">${r[3]}</td><td>${i<4?'<span class="badge g">生效</span>':'<span class="badge gray">停用</span>'}</td></tr>`).join('');
+}
+
+/* ============ 告警 ============ */
+const alarms = [
+  {lv:'r',n:'灯具损坏 · BN-0027',d:'经十路 P127 | 灯具无电流输出',t:'2分钟前'},
+  {lv:'r',n:'线路异常 · BN-0134',d:'滨江大道 P234 | 漏电告警',t:'8分钟前'},
+  {lv:'w',n:'通信中断 · BN-0302',d:'中山路 P402 | 离线 30 分钟',t:'25分钟前'},
+  {lv:'w',n:'电压偏低 · BN-0418',d:'人民路 P518 | 198V',t:'40分钟前'},
+  {lv:'i',n:'计划性维护提醒',d:'解放路 12 盏灯具光衰到期',t:'1小时前'},
+];
+function renderAlarms(){
+  const el=document.getElementById('alarmList'); if(!el) return;
+  el.innerHTML = alarms.map(a=>`
+    <div class="al ${a.lv==='r'?'':a.lv}">
+      <div class="t"><div class="n">${a.n}</div><div class="d">${a.d}</div></div>
+      <div class="tm">${a.t}</div>
+    </div>`).join('');
+  const set=(id,v)=>{const e=document.getElementById(id); if(e)e.textContent=v;};
+  set('alcount', alarms.length+' 条');
+  set('a-pend', alarms.filter(a=>a.lv==='r').length);
+  set('a-doing', alarms.filter(a=>a.lv==='w').length);
+  set('a-done', 7);
+}
+
+/* ============ 日志 ============ */
+const LOGS = [
+  ['09:42:18','操作','BN-0027','下发开灯指令','管理员','成功'],
+  ['09:40:03','告警','BN-0134','漏电告警上报','系统','告警'],
+  ['09:38:55','操作','全域','批量调光至 70%','王管理','成功'],
+  ['09:35:12','系统','平台','策略「分时段调光」生效','系统','成功'],
+  ['09:30:44','操作','BN-0455','修改设备安装位置','赵管理','成功'],
+  ['09:28:09','告警','BN-0302','设备离线','系统','告警'],
+  ['09:25:31','操作','ops_user_a','工单 #20260915-07 闭环','运维员A','成功'],
+  ['09:20:17','系统','网关','EMQX 连接正常','系统','成功'],
+];
+function renderLogs(){
+  const tb=document.getElementById('logtbody'); if(!tb) return;
+  tb.innerHTML = LOGS.map(l=>`<tr>
+    <td class="mono" style="font-family:Consolas;">${l[0]}</td>
+    <td>${l[1]==='告警'?'<span class="badge r">告警</span>':(l[1]==='操作'?'<span class="badge b">操作</span>':'<span class="badge gray">系统</span>')}</td>
+    <td class="mono" style="font-family:Consolas;">${l[2]}</td><td>${l[3]}</td><td>${l[4]}</td>
+    <td>${l[5]==='成功'?'<span class="badge g">成功</span>':'<span class="badge o">告警</span>'}</td>
+  </tr>`).join('');
+}
+
+/* ============ 资产图表（纯 CSS 环形） ============ */
+function renderAssetChart(){
+  const el=document.getElementById('assetChart'); if(!el) return;
+  const data=[{n:'LED 路灯',v:452,c:'#2ea6ff'},{n:'单灯控制器',v:500,c:'#25d07a'},
+              {n:'集中控制器',v:18,c:'#ff9a3c'},{n:'智慧灯杆',v:36,c:'#22d3ee'}];
+  const max=500;
+  el.innerHTML = data.map(d=>`
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-bottom:5px;">
+        <span>${d.n}</span><b style="color:${d.c};font-family:Consolas;">${d.v}</b></div>
+      <div class="bar" style="margin:0;"><i style="width:${(d.v/max*100).toFixed(1)}%;background:${d.c};"></i></div>
+    </div>`).join('');
+}
+
+/* ============ toast ============ */
+let tmr;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(tmr); tmr=setTimeout(()=>el.classList.remove('show'),2000);
+}
+
+/* ============ 启动 ============ */
+function boot(){
+  initMap(); renderStg(); renderTables(); renderAlarms(); renderLogs(); renderAssetChart(); clock(); updateStats();
+  setInterval(clock,1000);
+  setInterval(()=>{
+    kwh += Math.random()*0.6;
+    updateStats();
+  },3000);
+  setTimeout(()=>document.getElementById('boot').classList.add('hide'),1500);
+}
+if(document.readyState==='complete') boot(); else window.addEventListener('load', boot);
+</script>
+</body>
+</html>
